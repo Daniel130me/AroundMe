@@ -1,0 +1,122 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Dark theme colors (Default) */
+  --bg-slate-950: #020617;
+  --bg-slate-900: #0f172a;
+  --bg-slate-800: #1e293b;
+  --bg-slate-850: #1e293b;
+  --border-slate-800: #1e293b;
+  
+  --text-slate-100: #f1f5f9;
+  --text-slate-200: #e2e8f0;
+  --text-slate-300: #cbd5e1;
+  --text-slate-400: #94a3b8;
+  --text-slate-500: #64748b;
+
+  /* Custom map styling variables for offline mode */
+  --map-bg-streets: #1e293b;
+  --map-bg-sat: #020617;
+  --map-lagoon: #1e293b;
+  --map-water: #1e3a8a;
+  --map-ocean: #1e3a8a;
+  --map-road: #475569;
+  --map-road-sat: #334155;
+  
+  --shadow-color: rgba(0, 0, 0, 0.5);
+}
+
+:root.light {
+  /* Light theme colors */
+  --bg-slate-950: #f8fafc; /* light slate-50 */
+  --bg-slate-900: #ffffff; /* pure white background for containers */
+  --bg-slate-800: #f1f5f9; /* slate-100 secondary/cards */
+  --bg-slate-850: #cbd5e1; /* slate-300 border color */
+  --border-slate-800: #cbd5e1; /* slate-300 border */
+  
+  --text-slate-100: #0f172a; /* deep dark text */
+  --text-slate-200: #1e293b; /* dark slate-800 secondary */
+  --text-slate-300: #334155; /* slate-700 description text */
+  --text-slate-400: #475569; /* slate-600 metadata */
+  --text-slate-500: #64748b; /* slate-500 light gray text */
+
+  /* Custom map styling variables for offline mode (light mode) */
+  --map-bg-streets: #f8fafc;
+  --map-bg-sat: #cbd5e1;
+  --map-lagoon: #93c5fd;
+  --map-water: #3b82f6;
+  --map-ocean: #1e3a8a;
+  --map-road: #e2e8f0;
+  --map-road-sat: #94a3b8;
+  
+  --shadow-color: rgba(15, 23, 42, 0.08);
+}
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  /* Overrides for theme adaptability */
+  --color-slate-950: var(--bg-slate-950);
+  --color-slate-900: var(--bg-slate-900);
+  --color-slate-800: var(--bg-slate-800);
+  --color-slate-850: var(--bg-slate-850);
+  --color-border-slate-800: var(--border-slate-800);
+  
+  --color-slate-100: var(--text-slate-100);
+  --color-slate-200: var(--text-slate-200);
+  --color-slate-300: var(--text-slate-300);
+  --color-slate-400: var(--text-slate-400);
+  --color-slate-500: var(--text-slate-500);
+}
+
+/* Light Mode Visual Overrides and Enhancements */
+
+/* Heading and text overrides to guarantee text legibility */
+.light h1.text-white,
+.light h2.text-white,
+.light h3.text-white,
+.light h4.text-white,
+.light h5.text-white,
+.light div.text-white:not(button *, button, .bg-blue-600 *, .bg-blue-600, .bg-indigo-600 *, .bg-indigo-600, .bg-emerald-600 *, .bg-emerald-600, .bg-orange-500 *, .bg-orange-500),
+.light span.text-white:not(button *, button, .bg-blue-600 *, .bg-blue-600, .bg-indigo-600 *, .bg-indigo-600, .bg-emerald-600 *, .bg-emerald-600, .bg-orange-500 *, .bg-orange-500) {
+  color: var(--text-slate-100) !important;
+}
+
+/* Subtle shadows for bento cards and sections in light mode */
+.light .bg-slate-900,
+.light .bg-slate-950,
+.light aside,
+.light header {
+  box-shadow: 0 10px 15px -3px var(--shadow-color), 0 4px 6px -4px var(--shadow-color) !important;
+  border-color: var(--border-slate-800) !important;
+}
+
+/* Offline Interactive Vector Map SVG Overrides */
+.light svg g path[fill="#1e293b"],
+.light svg g path[fill="#0f172a"] {
+  fill: #93c5fd !important; /* light blue lagoon */
+  opacity: 0.55 !important;
+}
+.light svg g path[fill="#1e3a8a"],
+.light svg g path[fill="#172554"] {
+  fill: #60a5fa !important; /* light blue waterbody */
+  opacity: 0.65 !important;
+}
+.light svg g rect[fill="#1e3a8a"],
+.light svg g rect[fill="#1e293b"] {
+  fill: #3b82f6 !important; /* Atlantic Ocean */
+  opacity: 0.45 !important;
+}
+.light svg g path[stroke="#475569"],
+.light svg g path[stroke="#334155"] {
+  stroke: #cbd5e1 !important; /* light roads */
+}
+.light svg g path[stroke="#64748b"] {
+  stroke: #94a3b8 !important; /* bridge routes */
+}
+.light svg g path[stroke="#f59e0b"] {
+  stroke: #f59e0b !important; /* keep gold accent bridges */
+}
+
+

@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "users": {
+      "fields": {
+        "id": "string",
+        "name": "string",
+        "email": "string",
+        "interests": "array",
+        "createdAt": "timestamp"
+      }
+    },
+    "saved_places": {
+      "fields": {
+        "id": "string",
+        "userId": "string",
+        "placeId": "string",
+        "collectionName": "string",
+        "name": "string",
+        "category": "string",
+        "lat": "number",
+        "lng": "number",
+        "notes": "string",
+        "savedAt": "timestamp"
+      }
+    },
+    "contributions": {
+      "fields": {
+        "id": "string",
+        "userId": "string",
+        "placeId": "string",
+        "placeName": "string",
+        "type": "string",
+        "content": "string",
+        "source": "string",
+        "status": "string",
+        "createdAt": "timestamp"
+      }
+    },
+    "chats": {
+      "fields": {
+        "id": "string",
+        "userId": "string",
+        "placeId": "string",
+        "messages": "array",
+        "updatedAt": "timestamp"
+      }
+    }
+  }
+}

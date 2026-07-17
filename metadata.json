@@ -1,0 +1,6 @@
+{
+  "name": "AroundMe AI",
+  "description": "An intelligent local discovery and storytelling map companion. Uses Google Maps and Gemini AI to surface local history, facts, news, and safety information.",
+  "requestFramePermissions": ["geolocation", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

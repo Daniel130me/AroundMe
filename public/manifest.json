@@ -1,0 +1,21 @@
+{
+  "short_name": "AroundMe AI",
+  "name": "AroundMe AI: Interactive Local Discovery Map",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=192&q=80",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=512&q=80",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "display": "standalone",
+  "orientation": "portrait"
+}

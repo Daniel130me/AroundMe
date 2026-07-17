@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User profile access
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+    
+    // Saved places for exploration lists
+    match /saved_places/{savedPlaceId} {
+      allow read, write: if true;
+    }
+    
+    // User-submitted local story or fact contributions
+    match /contributions/{contributionId} {
+      allow read, write: if true;
+    }
+    
+    // Conversational AI threads about places
+    match /chats/{chatId} {
+      allow read, write: if true;
+    }
+  }
+}
