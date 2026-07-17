@@ -617,43 +617,91 @@ JSON schema requirement:
       return res.json({ status: "success", places: fallbackList });
     }
 
-    const generatedPlaces = (parsed.places || []).map((p: any) => {
-      // Clean and normalize each place property
-      const finalFacts = (p.facts || []).map((f: any) => ({
-        text: f.text || "Central heritage element.",
-        source: isGrounded ? (f.source || "Search Record") : "Generative AI Knowledge Model",
-        verified: isGrounded ? (f.verified !== false) : false
-      }));
+    let generatedPlaces: any[] = [];
+    try {
+      if (!parsed || !Array.isArray(parsed.places)) {
+        throw new Error("Parsed JSON response does not contain a 'places' array");
+      }
 
-      const finalNews = (p.news || []).map((n: any) => ({
-        date: n.date || "2026-05-01",
-        headline: n.headline || "Activity reported nearby",
-        publisher: isGrounded ? (n.publisher || "Local Report") : "Generative AI Knowledge Model",
-        summary: n.summary || "Engagement and active interest reported around this location."
-      }));
+      generatedPlaces = parsed.places.map((p: any) => {
+        if (!p || typeof p !== "object") {
+          throw new Error("An item in 'places' is not a valid object");
+        }
 
-      return {
-        id: p.id || `gen-${Math.random().toString(36).substr(2, 9)}`,
-        name: p.name || "Real Landmark",
-        category: p.category || "History",
-        type: p.type || "Point of Interest",
-        lat: p.lat || uLat,
-        lng: p.lng || uLng,
-        rating: p.rating || 4.5,
-        reviewCount: p.reviewCount || 100,
-        address: p.address || `Near ${uLat.toFixed(3)}, ${uLng.toFixed(3)}`,
-        distance: p.distance || "1.0 km",
-        status: p.status || "Open Now",
-        image: p.image || "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=800&q=80",
-        quickFact: p.quickFact || "A prominent local landmark rich in story.",
-        facts: finalFacts,
-        about: p.about || "This historic point of interest marks a regional heritage node.",
-        history: p.history || [{ year: "Recent", event: "Continues to be a key point of interest." }],
-        news: finalNews,
-        isGrounded,
-        source
-      };
-    });
+        // Clean and normalize facts list safely checking Array.isArray
+        const rawFacts = Array.isArray(p.facts) ? p.facts : [];
+        const finalFacts = rawFacts.map((f: any) => {
+          const factObj = (f && typeof f === "object") ? f : { text: String(f || "Central heritage element.") };
+          return {
+            text: factObj.text || "Central heritage element.",
+            source: isGrounded ? (factObj.source || "Search Record") : "Generative AI Knowledge Model",
+            verified: isGrounded ? (factObj.verified !== false) : false
+          };
+        });
+
+        // Clean and normalize news list safely checking Array.isArray
+        const rawNews = Array.isArray(p.news) ? p.news : [];
+        const finalNews = rawNews.map((n: any) => {
+          const newsObj = (n && typeof n === "object") ? n : { headline: String(n || "Activity reported nearby") };
+          return {
+            date: newsObj.date || "2026-05-01",
+            headline: newsObj.headline || "Activity reported nearby",
+            publisher: isGrounded ? (newsObj.publisher || "Local Report") : "Generative AI Knowledge Model",
+            summary: newsObj.summary || "Engagement and active interest reported around this location."
+          };
+        });
+
+        // Clean and normalize history list safely checking Array.isArray
+        const rawHistory = Array.isArray(p.history) ? p.history : [];
+        const finalHistory = rawHistory.length > 0 ? rawHistory.map((h: any) => {
+          const histObj = (h && typeof h === "object") ? h : { event: String(h || "Continues to be a key point of interest.") };
+          return {
+            year: histObj.year || "Recent",
+            event: histObj.event || "Continues to be a key point of interest."
+          };
+        }) : [{ year: "Recent", event: "Continues to be a key point of interest." }];
+
+        // Parse and validate numeric fields gracefully
+        const parseNum = (val: any, defaultVal: number): number => {
+          if (typeof val === "number") return isNaN(val) ? defaultVal : val;
+          if (typeof val === "string") {
+            const parsedVal = parseFloat(val);
+            return isFinite(parsedVal) ? parsedVal : defaultVal;
+          }
+          return defaultVal;
+        };
+
+        const finalLat = parseNum(p.lat, uLat);
+        const finalLng = parseNum(p.lng, uLng);
+        const finalRating = parseNum(p.rating, 4.5);
+        const finalReviewCount = Math.round(parseNum(p.reviewCount, 100));
+
+        return {
+          id: p.id || `gen-${Math.random().toString(36).substr(2, 9)}`,
+          name: p.name || "Real Landmark",
+          category: p.category || "History",
+          type: p.type || "Point of Interest",
+          lat: finalLat,
+          lng: finalLng,
+          rating: finalRating,
+          reviewCount: finalReviewCount,
+          address: p.address || `Near ${uLat.toFixed(3)}, ${uLng.toFixed(3)}`,
+          distance: p.distance || "1.0 km",
+          status: p.status || "Open Now",
+          image: p.image || "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=800&q=80",
+          quickFact: p.quickFact || "A prominent local landmark rich in story.",
+          facts: finalFacts,
+          about: p.about || "This historic point of interest marks a regional heritage node.",
+          history: finalHistory,
+          news: finalNews,
+          isGrounded,
+          source
+        };
+      });
+    } catch (normErr) {
+      console.error("Normalizing generated places failed:", normErr, responseText);
+      return res.json({ status: "success", places: fallbackList });
+    }
 
     // Save to cache
     dynamicPlacesCache.set(cacheKey, generatedPlaces);
