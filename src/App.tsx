@@ -72,6 +72,7 @@ export default function App() {
   // Geolocation states
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isGeocoding, setIsGeocoding] = useState(false);
 
   // Map preferences
   const [mapLayer, setMapLayer] = useState<"streets" | "satellite">("streets");
@@ -434,7 +435,7 @@ export default function App() {
                 </div>
 
                 {/* Location Selection & Engagement Bar */}
-                <div className="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl space-y-3 shadow-xl">
+                <div className="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl space-y-3.5 shadow-xl">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
                       <MapPin className="h-4 w-4 text-blue-500 animate-pulse" />
@@ -448,23 +449,26 @@ export default function App() {
                     {userLocation && currentLocation && (Math.abs(currentLocation.lat - userLocation.lat) > 0.001 || Math.abs(currentLocation.lng - userLocation.lng) > 0.001) && (
                       <button
                         onClick={() => setCurrentLocation(userLocation)}
-                        className="text-[10px] font-black uppercase tracking-wider text-blue-400 hover:text-blue-300 bg-blue-600/10 border border-blue-500/20 px-2.5 py-1 rounded-lg transition-all"
+                        className="text-[10px] font-black uppercase tracking-wider text-blue-400 hover:text-blue-300 bg-blue-600/10 border border-blue-500/20 px-2.5 py-1 rounded-lg transition-all animate-fade-in"
                       >
                         Reset to GPS Location
                       </button>
                     )}
                   </div>
 
+                  {/* Horizontal scrolling global jump list */}
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Jump to Area:</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Jump to Famous Cities:</span>
                     <div className="flex flex-wrap gap-1.5">
                       {[
-                        { name: "Victoria Island", lat: 6.4281, lng: 3.4219 },
-                        { name: "Lekki Phase 1", lat: 6.4326, lng: 3.4735 },
-                        { name: "Ikoyi", lat: 6.4549, lng: 3.4308 },
-                        { name: "Lagos Island", lat: 6.4485, lng: 3.3986 },
-                        { name: "Ikeja (Mainland)", lat: 6.6018, lng: 3.3515 },
-                        { name: "Surulere", lat: 6.5000, lng: 3.3500 },
+                        { name: "Lagos, Nigeria", lat: 6.4447, lng: 3.4045 },
+                        { name: "Paris, France", lat: 48.8566, lng: 2.3522 },
+                        { name: "New York, USA", lat: 40.7128, lng: -74.0060 },
+                        { name: "Tokyo, Japan", lat: 35.6762, lng: 139.6503 },
+                        { name: "London, UK", lat: 51.5074, lng: -0.1278 },
+                        { name: "Sydney, Australia", lat: -33.8688, lng: 151.2093 },
+                        { name: "Cairo, Egypt", lat: 30.0444, lng: 31.2357 },
+                        { name: "Rio, Brazil", lat: -22.9068, lng: -43.1729 },
                       ].map((nh) => {
                         const isCurrent = currentLocation && Math.abs(currentLocation.lat - nh.lat) < 0.01 && Math.abs(currentLocation.lng - nh.lng) < 0.01;
                         return (
@@ -484,6 +488,53 @@ export default function App() {
                         );
                       })}
                     </div>
+                  </div>
+
+                  {/* Geolocation/Geocoding search teleporter */}
+                  <div className="pt-2.5 border-t border-slate-800/60 grid grid-cols-1 gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Search & Teleport Anywhere:</span>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const formData = new FormData(e.currentTarget);
+                        const query = formData.get("cityQuery") as string;
+                        if (!query.trim()) return;
+
+                        setIsGeocoding(true);
+                        fetch(`/api/places/geocode?query=${encodeURIComponent(query)}`)
+                          .then((res) => res.json())
+                          .then((data) => {
+                            if (data.status === "success" && data.lat && data.lng) {
+                              setCurrentLocation({ lat: data.lat, lng: data.lng });
+                              e.currentTarget.reset();
+                            } else {
+                              alert(`Could not find coordinates for "${query}". Try searching London, Paris, or Tokyo!`);
+                            }
+                          })
+                          .catch((err) => {
+                            console.error("Teleport failed:", err);
+                          })
+                          .finally(() => {
+                            setIsGeocoding(false);
+                          });
+                      }}
+                      className="flex gap-2"
+                    >
+                      <input
+                        name="cityQuery"
+                        type="text"
+                        placeholder="Type any address or city (e.g. Rome, Berlin, Kyoto...)"
+                        disabled={isGeocoding}
+                        className="flex-1 bg-slate-950 border border-slate-800/80 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/80 font-medium disabled:opacity-50"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isGeocoding}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow hover:shadow-blue-500/10 shrink-0 disabled:opacity-50"
+                      >
+                        {isGeocoding ? "Teleporting..." : "Go"}
+                      </button>
+                    </form>
                   </div>
                 </div>
 

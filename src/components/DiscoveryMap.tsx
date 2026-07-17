@@ -249,13 +249,47 @@ export default function DiscoveryMap({
     }
   }, [userLocation]);
 
+  // Distance utility
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Radius of earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // Get dynamic boundary coordinates for offline/fallback map representation
+  const getBounds = () => {
+    const distFromLagos = getDistance(center.lat, center.lng, 6.4447, 3.4045);
+    if (distFromLagos <= 50) {
+      return {
+        latMin: 6.41,
+        latMax: 6.46,
+        lngMin: 3.38,
+        lngMax: 3.55
+      };
+    }
+    // Center boundaries around active center dynamically
+    return {
+      latMin: center.lat - 0.025,
+      latMax: center.lat + 0.025,
+      lngMin: center.lng - 0.085,
+      lngMax: center.lng + 0.085
+    };
+  };
+
   // Simulated movement for transit mode
   const [simulatedLocation, setSimulatedLocation] = useState({ lat: 6.442, lng: 3.42 });
   useEffect(() => {
     if (transitActive) {
+      setSimulatedLocation(center);
       const interval = setInterval(() => {
         setSimulatedLocation((prev) => {
-          // Slowly wander around Victoria Island / Lekki
+          // Slowly wander around active center coordinates
           const newLat = prev.lat + (Math.random() - 0.4) * 0.0004 * transitSpeed;
           const newLng = prev.lng + (Math.random() - 0.5) * 0.0004 * transitSpeed;
           return { lat: newLat, lng: newLng };
@@ -263,15 +297,11 @@ export default function DiscoveryMap({
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [transitActive, transitSpeed]);
+  }, [transitActive, transitSpeed, center]);
 
-  // Helper to map LatLng coordinates to beautiful SVG pixel positions (Lagos layout)
-  // Lagos boundaries: Lat [6.41 to 6.46], Lng [3.38 to 3.55]
+  // Helper to map LatLng coordinates to beautiful SVG pixel positions dynamically
   const getSvgCoordinates = (lat: number, lng: number) => {
-    const latMin = 6.41;
-    const latMax = 6.46;
-    const lngMin = 3.38;
-    const lngMax = 3.55;
+    const { latMin, latMax, lngMin, lngMax } = getBounds();
 
     const width = 800;
     const height = 500;
@@ -297,13 +327,19 @@ export default function DiscoveryMap({
   };
 
   const handleOfflinePointSelect = (lat: number, lng: number) => {
-    let estimatedArea = "Lagos Coast";
-    if (lat > 6.445) {
-      estimatedArea = "Lagos Island / Ikoyi";
-    } else if (lat > 6.43) {
-      estimatedArea = "Victoria Island";
-    } else {
-      estimatedArea = "Lekki Peninsula";
+    const distFromLagos = getDistance(lat, lng, 6.4447, 3.4045);
+    let estimatedArea = `District (Lat: ${lat.toFixed(3)}, Lng: ${lng.toFixed(3)})`;
+    let addressStr = `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+
+    if (distFromLagos <= 50) {
+      if (lat > 6.445) {
+        estimatedArea = "Lagos Island / Ikoyi";
+      } else if (lat > 6.43) {
+        estimatedArea = "Victoria Island";
+      } else {
+        estimatedArea = "Lekki Peninsula";
+      }
+      addressStr = `${estimatedArea}, Lagos, Nigeria`;
     }
 
     const customPlace: Place = {
@@ -315,11 +351,11 @@ export default function DiscoveryMap({
       lng: lng,
       rating: 4.2,
       reviewCount: 1,
-      address: `${estimatedArea}, Lagos, Nigeria`,
+      address: addressStr,
       distance: "Selected Location",
       status: "Offline",
       image: "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80",
-      quickFact: `Offline coordinates point in Lagos.`,
+      quickFact: `Offline coordinates point at selected area.`,
       facts: [
         {
           text: "Connect to the internet to query full Gemini Sourced reports and verified news about this specific point.",
@@ -360,11 +396,7 @@ export default function DiscoveryMap({
       const svgX = (unscaledX / rect.width) * 800 - panOffset.x;
       const svgY = (unscaledY / rect.height) * 500 - panOffset.y;
 
-      // Map back to lat/lng
-      const latMin = 6.41;
-      const latMax = 6.46;
-      const lngMin = 3.38;
-      const lngMax = 3.55;
+      const { latMin, latMax, lngMin, lngMax } = getBounds();
 
       const lng = (svgX / 800) * (lngMax - lngMin) + lngMin;
       const lat = (1 - svgY / 500) * (latMax - latMin) + latMin;
@@ -378,20 +410,21 @@ export default function DiscoveryMap({
   };
 
   const triggerGenericCustomPlace = (lat: number, lng: number) => {
+    const distFromLagos = getDistance(lat, lng, 6.4447, 3.4045);
     const customPlace: Place = {
       id: `custom-${lat.toFixed(6)}-${lng.toFixed(6)}`,
-      name: `Lagos Point (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+      name: `Landmark Area (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
       category: "Hidden Gems",
       type: "Coordinates",
       lat: lat,
       lng: lng,
       rating: 4.3,
       reviewCount: 5,
-      address: `Lagos State, Nigeria`,
+      address: distFromLagos <= 50 ? "Lagos State, Nigeria" : `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
       distance: "Selected Location",
       status: "Explore Now",
       image: "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80",
-      quickFact: `Custom coordinates point in Lagos.`,
+      quickFact: `Custom coordinates point in active region.`,
       facts: [],
       about: `This point corresponds to the latitude ${lat.toFixed(5)} and longitude ${lng.toFixed(5)}. Discovering real-time reports about this vicinity...`,
       history: [],
