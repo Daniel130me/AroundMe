@@ -317,7 +317,7 @@ Return your response in this exact JSON schema:
 // Helper to filter and dynamically generate places globally
 app.get("/api/places/nearby", async (req, res) => {
   try {
-    const { category, search, lat, lng } = req.query;
+    const { category, search, lat, lng, interests } = req.query;
     
     let uLat = lat ? parseFloat(lat as string) : NaN;
     let uLng = lng ? parseFloat(lng as string) : NaN;
@@ -333,7 +333,7 @@ app.get("/api/places/nearby", async (req, res) => {
 
     // If the coordinates are close to Lagos (within 50km), we use the curated high-quality Lagos places list.
     if (distFromLagos <= 50) {
-      let places = LAGOS_PLACES.map(p => ({ ...p }));
+      let places = LAGOS_PLACES.map(p => ({ ...p, isGrounded: true, source: "cached" }));
 
       if (category && category !== "All") {
         places = places.filter(p => p.category.toLowerCase() === (category as string).toLowerCase());
@@ -356,13 +356,26 @@ app.get("/api/places/nearby", async (req, res) => {
           sortDistance: dist
         };
       });
-      places.sort((a, b) => (a as any).sortDistance - (b as any).sortDistance);
+
+      if (interests) {
+        const userInterestsList = (interests as string).split(",").map(i => i.trim().toLowerCase());
+        places.sort((a, b) => {
+          const aMatch = userInterestsList.includes(a.category.toLowerCase()) ? 1 : 0;
+          const bMatch = userInterestsList.includes(b.category.toLowerCase()) ? 1 : 0;
+          if (aMatch !== bMatch) {
+            return bMatch - aMatch; // Match on top
+          }
+          return (a as any).sortDistance - (b as any).sortDistance;
+        });
+      } else {
+        places.sort((a, b) => (a as any).sortDistance - (b as any).sortDistance);
+      }
 
       return res.json({ status: "success", places });
     }
 
     // Otherwise, we are in GLOBAL mode! Let's generate real landmarks near uLat, uLng dynamically using Gemini!
-    const cacheKey = `${uLat.toFixed(3)}_${uLng.toFixed(3)}_${category || "All"}_${search || ""}`;
+    const cacheKey = `${uLat.toFixed(3)}_${uLng.toFixed(3)}_${category || "All"}_${search || ""}_${interests || ""}`;
     if (dynamicPlacesCache.has(cacheKey)) {
       console.log(`Serving dynamic global landmarks for key ${cacheKey} from cache.`);
       return res.json({ status: "success", places: dynamicPlacesCache.get(cacheKey) });
@@ -385,17 +398,17 @@ app.get("/api/places/nearby", async (req, res) => {
           distance: "0.8 km",
           status: "Open Now",
           image: "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=800&q=80",
-          quickFact: "A prominent local landmark rich in community story and cultural significance.",
+          quickFact: "A prominent local landmark rich in story.",
           facts: [
-            { text: "Stands as a historical nexus point of regional development and cultural heritage.", source: "Global Cartography Registry", verified: true },
-            { text: "Offers stunning visual panoramic views of the adjacent city landscape.", source: "Travel Gazette", verified: true }
+            { text: "Stands as a historical heritage node.", source: "Global Cartography Registry", verified: false }
           ],
-          about: "This historic point of interest marks a key regional heritage node. Highly valued by residents and visiting explorers alike, it showcases local architecture, culture, and nature.",
+          about: "This historic point of interest marks a regional heritage node.",
           history: [
-            { year: "1924", event: "Formally registered as a prominent regional landmark." },
-            { year: "2018", event: "Enhanced with modernized public plazas and educational signs." }
+            { year: "1924", event: "Formally registered as a regional landmark." }
           ],
-          news: []
+          news: [],
+          isGrounded: false,
+          source: "unavailable"
         },
         {
           id: `global-landmark-2-${uLat.toFixed(3)}-${uLng.toFixed(3)}`,
@@ -410,15 +423,17 @@ app.get("/api/places/nearby", async (req, res) => {
           distance: "1.1 km",
           status: "Open • Closes 7:00 PM",
           image: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=800&q=80",
-          quickFact: "Known for its breathtaking natural flora, coastal breezes, and local wildlife.",
+          quickFact: "Known for its beautiful natural views and park walks.",
           facts: [
-            { text: "Spans a protected regional conservation habitat safe for rare local bird species.", source: "Conservation Union", verified: true }
+            { text: "Spans a local park area.", source: "Conservation Union", verified: false }
           ],
-          about: "A peaceful sanctuary of green space, this destination offers clean nature paths, dynamic viewpoints, and is ideal for walking, photography, and exploring local plant life.",
+          about: "A peaceful green space for walking and exploring.",
           history: [
             { year: "1975", event: "Earmarked as a protected municipal green space." }
           ],
-          news: []
+          news: [],
+          isGrounded: false,
+          source: "unavailable"
         }
       ];
       return res.json({ status: "success", places: fallbackList });
@@ -427,17 +442,20 @@ app.get("/api/places/nearby", async (req, res) => {
     // Call Gemini 3.5 Flash to generate 5 actual real-world places near coordinates
     const catConstraint = category && category !== "All" ? `with category: "${category}"` : "";
     const searchConstraint = search ? `matching the search query: "${search}"` : "";
+    const userInterestsList = interests ? (interests as string).split(",").map(i => i.trim()) : [];
+    const interestsConstraint = userInterestsList.length > 0 ? `The user is highly interested in topics: ${userInterestsList.join(", ")}. Please prioritize generating places and landmarks that match these interests.` : "";
     
     const prompt = `You are a world-class travel guide and location-intelligence engine for "AroundMe AI".
 Generate exactly 5 highly accurate, interesting, and real landmarks, points of interest, restaurants, museums, parks, or hidden gems located near coordinates: latitude ${uLat}, longitude ${uLng} (or the nearest major city/neighborhood).
 
 Rules:
-1. Places MUST be real-world physical locations that actually exist near these coordinates.
+1. Places MUST be real-world physical locations that actually exist near these coordinates. You must use Google Search to find actual, real places, businesses, historical buildings, parks, or physical sights that are really there.
 2. The category must be one of: 'History', 'Nature', 'Culture', 'Food', 'Hidden Gems'.
 3. Output MUST be returned in the exact JSON schema defined below.
 
 ${catConstraint}
 ${searchConstraint}
+${interestsConstraint}
 
 JSON schema requirement:
 {
@@ -474,6 +492,7 @@ JSON schema requirement:
       model: "gemini-3.5-flash",
       contents: prompt,
       config: {
+        tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -544,7 +563,11 @@ JSON schema requirement:
     });
 
     const parsed = JSON.parse(response.text.trim());
-    const generatedPlaces = parsed.places || [];
+    const generatedPlaces = (parsed.places || []).map((p: any) => ({
+      ...p,
+      isGrounded: true,
+      source: "search"
+    }));
 
     // Save to cache
     dynamicPlacesCache.set(cacheKey, generatedPlaces);
@@ -621,153 +644,17 @@ app.post("/api/places/generate-summary", async (req, res) => {
   // High-quality dynamic fallback generator tailored based on place type keywords
   const getDynamicFallback = () => {
     const cleanName = placeName || "Lagos Landmark";
-    const areaName = address ? (address.split(',')[1]?.trim() || address.split(',')[0]?.trim() || "Lagos") : "Lagos";
-    const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(cleanName + " " + areaName)}`;
-    const lowerName = cleanName.toLowerCase();
-    
-    let aboutText = `**${cleanName}** is an essential landmark located at **${address || "Lagos State, Nigeria"}**. Serving as a local node, it plays a key part in the everyday movement and interactions of the vibrant residents in the ${areaName} neighborhood.\n\nOver the years, this area has benefited from the energetic expansion of Lagos, growing in accessibility and economic importance, reflecting the resilience and fast-paced development of Lagos State.`;
-    
-    let quickFactText = `${cleanName} is a vital focal point of transit, commerce, or local community life in ${areaName}.`;
-    
-    let factsList = [
-      {
-        text: `Serves as a prominent community reference point inside the ${areaName} zone.`,
-        source: `Lagos Geographic Records`,
-        url: googleSearchUrl,
-        verified: true
-      },
-      {
-        text: `Positioned strategically along high-traffic pedestrian and transport networks.`,
-        source: `Lagos Urban Transit Authority`,
-        url: googleSearchUrl,
-        verified: true
-      }
-    ];
-
-    let historyList = [
-      { year: "2019", event: "Lagos municipal infrastructure review earmarked the surrounding corridor for accessibility improvement." },
-      { year: "2024", event: "Upgrades to security and regional street lighting bolstered local commerce and safety." }
-    ];
-
-    let newsList = [
-      {
-        date: "2026-03-24",
-        headline: `Lagos State Outlines New Growth Strategy for ${cleanName} Area`,
-        publisher: "Lagos Metro News",
-        summary: `City administrators announced coordinated plans to expand municipal cleanup and security patrols around the busy ${cleanName} district.`,
-        url: googleSearchUrl
-      },
-      {
-        date: "2026-06-12",
-        headline: `Economic Vitality Increases Near ${cleanName}`,
-        publisher: "Vanguard Nigeria",
-        summary: `Business owners and transport service operators around ${cleanName} report a surge in client foot traffic and better road network connections.`,
-        url: googleSearchUrl
-      }
-    ];
-
-    // Customize based on landmark type keywords
-    if (lowerName.includes("station") || lowerName.includes("rail") || lowerName.includes("train") || lowerName.includes("terminal") || lowerName.includes("transit") || lowerName.includes("bus")) {
-      aboutText = `**${cleanName}** is a major transport terminal serving commuters across Lagos. Operating as a critical link in the state's expanding modern transit network, this station enables the rapid transit of thousands of passengers daily, lessening road congestion and supporting inter-city travel.\n\nIt stands as a testament to the ongoing Lagos State Strategic Transport Master Plan (STMP), which aims to deliver fully integrated rail, water, and road transit routes across the metropolis.`;
-      quickFactText = `A critical transit gateway connecting ${areaName} to the wider Lagos metropolitan railway and road transport web.`;
-      factsList = [
-        {
-          text: `Facilitates daily transit links and forms a core pillar of the Lagos State Strategic Transport Master Plan.`,
-          source: `Lagos Metropolitan Area Transport Authority (LAMATA)`,
-          url: googleSearchUrl,
-          verified: true
-        },
-        {
-          text: `Serves as a vital inter-modal node, boosting local commerce, trading hubs, and pedestrian flow in ${areaName}.`,
-          source: `LAMATA Rail Project Office`,
-          url: googleSearchUrl,
-          verified: true
-        }
-      ];
-      historyList = [
-        { year: "2008", event: "Proposed as part of the unified metropolitan mass transit corridors." },
-        { year: "2023", event: "Completed integration into the wider regional transit network to ease central Lagos congestion." }
-      ];
-      newsList = [
-        {
-          date: "2026-04-18",
-          headline: `Lagos LAMATA announces service expansion and extra train arrivals at ${cleanName}`,
-          publisher: "Lagos Guardian",
-          summary: `Transit authorities plan to increase daily locomotive shuttle runs to accommodate a growing influx of suburban commuters.`,
-          url: googleSearchUrl
-        }
-      ];
-    } else if (lowerName.includes("market") || lowerName.includes("mall") || lowerName.includes("plaza") || lowerName.includes("shop") || lowerName.includes("store") || lowerName.includes("supermarket")) {
-      aboutText = `**${cleanName}** is an energetic economic engine and trading destination in ${areaName}. Serving as a busy marketplace, it brings together local farmers, wholesalers, and retail merchants, forming a key node of food distribution and retail trade in Lagos.\n\nFrom fresh produce to textiles and consumer electronics, this market reflects the entrepreneurial spirit of Lagos, where local trade drives the state's multi-billion dollar informal economy.`;
-      quickFactText = `A bustling hub of retail trade and community commerce driving the local economy of ${areaName}.`;
-      factsList = [
-        {
-          text: `Serves as a major supply route and distribution node for commodities and general goods in ${areaName}.`,
-          source: `Lagos State Market Men and Women Association`,
-          url: googleSearchUrl,
-          verified: true
-        },
-        {
-          text: `Generates hundreds of daily micro-enterprise opportunities for local vendors and traders.`,
-          source: `Lagos State Ministry of Commerce & Industry`,
-          url: googleSearchUrl,
-          verified: true
-        }
-      ];
-      historyList = [
-        { year: "1998", event: "Expanded from an informal roadside market into an organized local trading district." },
-        { year: "2021", event: "Lagos State launched a modernization and hygiene scheme across major local markets." }
-      ];
-      newsList = [
-        {
-          date: "2026-05-30",
-          headline: `Infrastructure upgrade and solar lighting launched at ${cleanName}`,
-          publisher: "Punch Nigeria",
-          summary: `Local development groups installed solar-powered streetlights to support late-night commerce and safe operations for evening vendors.`,
-          url: googleSearchUrl
-        }
-      ];
-    } else if (lowerName.includes("police") || lowerName.includes("security") || lowerName.includes("court") || lowerName.includes("law") || lowerName.includes("military") || lowerName.includes("barracks")) {
-      aboutText = `**${cleanName}** is a key administrative and public safety establishment dedicated to community security and the rule of law in ${areaName}. Under the jurisdiction of the Lagos State Police Command, this station coordinates crime prevention, local patrols, and quick response operations in the surrounding neighborhood.\n\nThrough community policing initiatives, officers work in partnership with local residents and neighborhood safety corps to ensure a secure, peaceful, and productive environment for all businesses and residents.`;
-      quickFactText = `A crucial neighborhood security division maintaining safety and peace across the ${areaName} sector.`;
-      factsList = [
-        {
-          text: `Serves as the primary public safety dispatch center for security and emergency responses in ${areaName}.`,
-          source: `Lagos State Police Command Records`,
-          url: googleSearchUrl,
-          verified: true
-        },
-        {
-          text: `Hosts active community-police partnership forums to foster trust and joint crime-prevention initiatives.`,
-          source: `Lagos State Neighborhood Safety Agency (LNSA)`,
-          url: googleSearchUrl,
-          verified: true
-        }
-      ];
-      historyList = [
-        { year: "1992", event: "Stationed to coordinate public safety as the residential population of the sector rapidly expanded." },
-        { year: "2022", event: "Upgraded with modern communication equipment and local emergency response patrol vehicles." }
-      ];
-      newsList = [
-        {
-          date: "2026-06-05",
-          headline: `${cleanName} Division reports 25% drop in neighborhood incidents following joint community patrols`,
-          publisher: "PM News Lagos",
-          summary: `The area commander thanked neighborhood safety groups for their collaborative support in monitoring key transport corridors.`,
-          url: googleSearchUrl
-        }
-      ];
-    }
-
     return {
       status: "success",
       isDemo: true,
-      quickFact: quickFactText,
-      about: aboutText,
-      facts: factsList,
-      history: historyList,
-      news: newsList,
-      uncertainClaims: "None"
+      quickFact: "Live info is unavailable right now.",
+      about: `**${cleanName}** is a local point of interest. Live information summary and real-time updates are currently unavailable because the live search connection is offline.`,
+      facts: [],
+      history: [],
+      news: [],
+      uncertainClaims: "None",
+      source: "unavailable",
+      isGrounded: false
     };
   };
 
@@ -862,6 +749,7 @@ Generate the response in JSON format matching this strict schema:
 Remember: Never invent facts, news, or URLs. Base the response strictly on actual search grounding results.`;
 
     let responseText = "";
+    let attemptType = 1;
 
     // Attempt 1: Search grounding with strict JSON responseSchema
     try {
@@ -921,6 +809,7 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
         }
       });
       responseText = response.text || "";
+      attemptType = 1;
     } catch (err) {
       if (isQuotaError(err)) {
         triggerApiThrottle();
@@ -940,6 +829,7 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
           }
         });
         responseText = response.text || "";
+        attemptType = 2;
       } catch (err2) {
         if (isQuotaError(err2)) {
           triggerApiThrottle();
@@ -953,7 +843,7 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
         try {
           const response = await ai.models.generateContent({
             model: "gemini-3.5-flash",
-            contents: prompt + "\n\nDo not use Google Search. Rely solely on your extensive knowledge of Lagos, Nigeria.",
+            contents: prompt + "\n\nDo not use Google Search. Rely solely on your extensive knowledge. CRITICAL: For Attempt 3, set verified to false, set source to \"Generative AI Knowledge Model\", and set urls to empty string or Google search query link.",
             config: {
               responseMimeType: "application/json",
               responseSchema: {
@@ -1006,6 +896,7 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
             }
           });
           responseText = response.text || "";
+          attemptType = 3;
         } catch (err3) {
           console.error("All Gemini attempts failed. Returning customized local fallback.", err3);
           if (isQuotaError(err3)) {
@@ -1037,6 +928,33 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
       });
     }
 
+    let isGrounded = true;
+    let source = "search";
+
+    if (attemptType === 3) {
+      isGrounded = false;
+      source = "model_only";
+      
+      // Override facts to be unverified and explicitly named Generative AI
+      if (parsed.facts) {
+        parsed.facts = parsed.facts.map((f: any) => ({
+          ...f,
+          verified: false,
+          source: "Generative AI Knowledge Model",
+          url: `https://www.google.com/search?q=${encodeURIComponent(placeName + " " + (f.text || ""))}`
+        }));
+      }
+      
+      // Override news
+      if (parsed.news) {
+        parsed.news = parsed.news.map((n: any) => ({
+          ...n,
+          publisher: "Generative AI Knowledge Model",
+          url: `https://www.google.com/search?q=${encodeURIComponent(n.headline || "")}`
+        }));
+      }
+    }
+
     // Double-check properties and populate missing ones safely
     const finalQuickFact = parsed.quickFact || `${placeName} is a notable point of interest inside Lagos.`;
     const finalAbout = parsed.about || `**${placeName}** is situated at ${address}. Sourced reports suggest this is a highly relevant location for commerce, community events, or local travel in Nigeria.`;
@@ -1045,7 +963,7 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
     const noInfo = finalQuickFact === "No information available for now." || (finalAbout && finalAbout.includes("couldn't find any specific news"));
 
     const finalFacts = noInfo ? [] : ((parsed.facts && parsed.facts.length > 0) ? parsed.facts : [
-      { text: `Central node of activity in ${address?.split(',')[1] || 'Lagos'}.`, source: "Local Directory", url: googleSearchUrl, verified: true }
+      { text: `Central node of activity in ${address?.split(',')[1] || 'Lagos'}.`, source: isGrounded ? "Local Directory" : "Generative AI Knowledge Model", url: googleSearchUrl, verified: isGrounded }
     ]);
     const finalHistory = noInfo ? [] : ((parsed.history && parsed.history.length > 0) ? parsed.history : [
       { year: "Recent", event: `${placeName} continues to expand its local influence and accessibility.` }
@@ -1054,7 +972,7 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
       {
         date: "2026-05-01",
         headline: `Vibrant activity observed at ${placeName}`,
-        publisher: "Lagos News Daily",
+        publisher: isGrounded ? "Lagos News Daily" : "Generative AI Knowledge Model",
         summary: `Visitors and locals report high engagement and active daily life around ${placeName}.`,
         url: googleSearchUrl
       }
@@ -1062,6 +980,8 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
 
     const responseData = {
       status: "success",
+      source,
+      isGrounded,
       quickFact: finalQuickFact,
       about: finalAbout,
       facts: finalFacts,
@@ -1102,7 +1022,8 @@ app.post("/api/places/chat", async (req, res) => {
 
   try {
     const systemInstruction = `You are AroundMe AI's expert "${roleType || "Local Tour Guide"}" representing ${placeName}.
-Answer questions about ${placeName} with high accuracy, curiosity, and cultural context. 
+Answer questions about ${placeName} with high accuracy, curiosity, and specific cultural or physical details.
+Use the Google Search tool to find actual real-time or historical information about ${placeName} and adjacent areas. Avoid vague templated phrases, repetitive slogans, or general marketing speak. Instead, offer concrete details (such as history, actual business types, nearby streets, transport hubs, or true events) to make your role authentic and credible.
 If asked about other places, try to connect them back or say that you specialize in ${placeName}.
 Always maintain a friendly, professional, and knowledgeable persona.`;
 
@@ -1117,7 +1038,8 @@ Always maintain a friendly, professional, and knowledgeable persona.`;
       contents: geminiContents,
       config: {
         systemInstruction: systemInstruction,
-        temperature: 0.7
+        temperature: 0.7,
+        tools: [{ googleSearch: {} }]
       }
     });
 

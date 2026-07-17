@@ -38,6 +38,33 @@ export default function PlaceDetail({
   const [loadedFacts, setLoadedFacts] = useState<any[]>([]);
   const [loadedHistory, setLoadedHistory] = useState<any[]>([]);
   const [loadedNews, setLoadedNews] = useState<any[]>([]);
+  const [summarySource, setSummarySource] = useState<string>(place.source || "cached");
+  const [isGroundedSummary, setIsGroundedSummary] = useState<boolean>(place.isGrounded ?? true);
+
+  // Freshness indicators helper functions
+  const getFactFreshness = (fact: any) => {
+    const src = (fact.source || "").toLowerCase();
+    if (src.includes("archive") || src.includes("history") || src.includes("record") || src.includes("museum")) {
+      return { text: "Long-standing Fact", style: "text-slate-400 bg-slate-950/40 border border-slate-800" };
+    }
+    return { text: "Recently Surfaced", style: "text-blue-400 bg-blue-500/10 border border-blue-500/20" };
+  };
+
+  const getHistoryFreshness = (yearStr: string) => {
+    const year = parseInt(yearStr, 10);
+    if (!isNaN(year) && year >= 2020) {
+      return { text: "Recent Era", style: "text-blue-400 bg-blue-500/10 border border-blue-500/20" };
+    }
+    return { text: "Established Background", style: "text-slate-400 bg-slate-950/40 border border-slate-800" };
+  };
+
+  const getNewsFreshness = (dateStr: string) => {
+    const year = parseInt(dateStr?.split("-")[0], 10);
+    if (!isNaN(year) && year >= 2025) {
+      return { text: "Recent News", style: "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-extrabold animate-pulse" };
+    }
+    return { text: "Archived News", style: "text-slate-400 bg-slate-950/40 border border-slate-800" };
+  };
 
   // Fetch AI Sourced Summary
   useEffect(() => {
@@ -45,6 +72,8 @@ export default function PlaceDetail({
     setLoadedFacts(place.facts || []);
     setLoadedHistory(place.history || []);
     setLoadedNews(place.news || []);
+    setSummarySource(place.source || "cached");
+    setIsGroundedSummary(place.isGrounded ?? true);
     setLoadingSummary(true);
     
     fetch("/api/places/generate-summary", {
@@ -71,6 +100,12 @@ export default function PlaceDetail({
           }
           if (data.news && data.news.length > 0) {
             setLoadedNews(data.news);
+          }
+          if (data.source) {
+            setSummarySource(data.source);
+          }
+          if (data.isGrounded !== undefined) {
+            setIsGroundedSummary(data.isGrounded);
           }
         } else {
           setAiSummary(place.about);
@@ -242,7 +277,31 @@ export default function PlaceDetail({
               <div className="space-y-6" id="overview-tab-content">
                 {/* About & Sourced Description */}
                 <div>
-                  <h3 className="text-sm font-extrabold text-white uppercase tracking-wider mb-2">About Landmark</h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-extrabold text-white uppercase tracking-wider">About Landmark</h3>
+                    {summarySource === "search" && (
+                      <span className="flex items-center gap-1 text-emerald-400 font-bold text-[9px] uppercase tracking-wider bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                        <ShieldCheck className="h-3 w-3" />
+                        <span>Search Grounded</span>
+                      </span>
+                    )}
+                    {summarySource === "cached" && (
+                      <span className="flex items-center gap-1 text-blue-400 font-bold text-[9px] uppercase tracking-wider bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20">
+                        <ShieldCheck className="h-3 w-3" />
+                        <span>Curated Guide</span>
+                      </span>
+                    )}
+                    {summarySource === "model_only" && (
+                      <span className="flex items-center gap-1 text-amber-500 font-bold text-[9px] uppercase tracking-wider bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                        <span>AI Generated (Not Verified)</span>
+                      </span>
+                    )}
+                    {summarySource === "unavailable" && (
+                      <span className="flex items-center gap-1 text-red-400 font-bold text-[9px] uppercase tracking-wider bg-red-500/10 px-2.5 py-1 rounded-full border border-red-500/20">
+                        <span>Live Info Unavailable</span>
+                      </span>
+                    )}
+                  </div>
                   {loadingSummary ? (
                     <div className="space-y-2">
                       <div className="h-4 bg-slate-800 rounded animate-pulse w-full"></div>
@@ -330,23 +389,36 @@ export default function PlaceDetail({
                   <div className="space-y-3.5">
                     {loadedFacts.map((fact, i) => {
                       const factUrl = fact.url || `https://www.google.com/search?q=${encodeURIComponent(place.name + " " + fact.text)}`;
+                      const freshness = getFactFreshness(fact);
+                      const factGrounded = fact.verified && isGroundedSummary;
                       return (
                         <div key={i} className="bg-slate-950/20 border border-slate-800/80 p-4 rounded-xl space-y-2">
-                          <p className="text-slate-300 text-sm leading-relaxed font-medium">"{fact.text}"</p>
-                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/50">
+                          <div className="flex items-center justify-between">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${freshness.style}`}>
+                              {freshness.text}
+                            </span>
+                            {factGrounded ? (
+                              <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-[9px]">
+                                Verified Source
+                              </span>
+                            ) : (
+                              <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-[9px]">
+                                AI-generated, not independently verified
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-slate-300 text-sm leading-relaxed font-medium pt-1">"{fact.text}"</p>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-800/50">
                             <a
                               href={factUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 hover:text-blue-400 text-slate-400 font-bold transition-colors"
                             >
-                              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                              <ShieldCheck className={`h-3.5 w-3.5 ${factGrounded ? "text-emerald-400" : "text-slate-500"}`} />
                               <span>Source: {fact.source}</span>
                               <ExternalLink className="h-3 w-3 inline opacity-70 ml-0.5" />
                             </a>
-                            <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-[9px]">
-                              Verified
-                            </span>
                           </div>
                         </div>
                       );
@@ -365,13 +437,21 @@ export default function PlaceDetail({
                   </div>
                 ) : (
                   <div className="relative border-l-2 border-slate-800 ml-4 pl-6 space-y-6">
-                    {loadedHistory.map((evt, i) => (
-                      <div key={i} className="relative">
-                        <div className="absolute -left-[31px] top-1.5 bg-blue-500 rounded-full h-3.5 w-3.5 border-4 border-slate-900 shadow"></div>
-                        <div className="text-xs font-black text-blue-400">{evt.year}</div>
-                        <p className="text-sm text-slate-300 leading-relaxed font-medium">{evt.event}</p>
-                      </div>
-                    ))}
+                    {loadedHistory.map((evt, i) => {
+                      const freshness = getHistoryFreshness(evt.year);
+                      return (
+                        <div key={i} className="relative">
+                          <div className="absolute -left-[31px] top-1.5 bg-blue-500 rounded-full h-3.5 w-3.5 border-4 border-slate-900 shadow"></div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="text-xs font-black text-blue-400">{evt.year}</div>
+                            <span className={`px-2 py-0.2 rounded text-[8px] font-bold uppercase tracking-wider scale-90 origin-left ${freshness.style}`}>
+                              {freshness.text}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-300 leading-relaxed font-medium">{evt.event}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -388,8 +468,9 @@ export default function PlaceDetail({
                   <div className="space-y-4">
                     {loadedNews.map((item, i) => {
                       const newsUrl = item.url || `https://www.google.com/search?q=${encodeURIComponent(item.headline + " " + item.publisher)}`;
+                      const freshness = getNewsFreshness(item.date);
                       return (
-                        <div key={i} className="bg-slate-950/20 border border-slate-800/80 p-4 rounded-xl space-y-2">
+                        <div key={i} className="bg-slate-950/20 border border-slate-800/80 p-4 rounded-xl space-y-2.5">
                           <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
                             <a
                               href={newsUrl}
@@ -400,10 +481,15 @@ export default function PlaceDetail({
                               <span>{item.publisher}</span>
                               <ExternalLink className="h-2.5 w-2.5 inline opacity-75" />
                             </a>
-                            <span className="flex items-center gap-1 text-slate-400">
-                              <Calendar className="h-3 w-3" />
-                              {item.date}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${freshness.style}`}>
+                                {freshness.text}
+                              </span>
+                              <span className="flex items-center gap-1 text-slate-400">
+                                <Calendar className="h-3 w-3" />
+                                {item.date}
+                              </span>
+                            </div>
                           </div>
                           <a
                             href={newsUrl}

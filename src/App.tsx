@@ -140,7 +140,8 @@ export default function App() {
     const searchParam = debouncedSearch ? `search=${encodeURIComponent(debouncedSearch)}` : "";
     const latParam = currentLocation ? `lat=${currentLocation.lat}` : "";
     const lngParam = currentLocation ? `lng=${currentLocation.lng}` : "";
-    const queryStr = [catParam, searchParam, latParam, lngParam].filter(Boolean).join("&");
+    const interestsParam = userInterests.length > 0 ? `interests=${encodeURIComponent(userInterests.join(","))}` : "";
+    const queryStr = [catParam, searchParam, latParam, lngParam, interestsParam].filter(Boolean).join("&");
 
     fetch(`/api/places/nearby?${queryStr}`)
       .then((res) => res.json())
@@ -152,7 +153,7 @@ export default function App() {
       .catch((err) => {
         console.error("Failed to load nearby places:", err);
       });
-  }, [categoryFilter, debouncedSearch, currentLocation]);
+  }, [categoryFilter, debouncedSearch, currentLocation, userInterests]);
 
   // Load saved places from localStorage (for offline/guest persistence)
   useEffect(() => {

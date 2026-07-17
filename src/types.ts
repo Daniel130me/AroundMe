@@ -2,6 +2,7 @@ export interface Fact {
   text: string;
   source: string;
   verified: boolean;
+  url?: string;
 }
 
 export interface TimelineEvent {
@@ -14,6 +15,7 @@ export interface NewsItem {
   headline: string;
   publisher: string;
   summary: string;
+  url?: string;
 }
 
 export interface Place {
@@ -34,6 +36,8 @@ export interface Place {
   about: string;
   history: TimelineEvent[];
   news: NewsItem[];
+  source?: string;
+  isGrounded?: boolean;
 }
 
 export interface SavedPlace {
