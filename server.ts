@@ -381,61 +381,70 @@ app.get("/api/places/nearby", async (req, res) => {
       return res.json({ status: "success", places: dynamicPlacesCache.get(cacheKey) });
     }
 
+    let responseText = "";
+    let attemptType = 1;
+    let isGrounded = true;
+    let source = "search";
+
+    const mockCategory = (category as string) || "All";
+    const fallbackList = [
+      {
+        id: `global-landmark-1-${uLat.toFixed(3)}-${uLng.toFixed(3)}`,
+        name: `Historic Discovery Point`,
+        category: mockCategory === "All" || mockCategory === "History" ? "History" : mockCategory,
+        type: "Monument",
+        lat: uLat + 0.005,
+        lng: uLng + 0.005,
+        rating: 4.6,
+        reviewCount: 320,
+        address: `Nearby Global District (Lat: ${uLat.toFixed(3)}, Lng: ${uLng.toFixed(3)})`,
+        distance: "0.8 km",
+        status: "Open Now",
+        image: "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=800&q=80",
+        quickFact: "A prominent local landmark rich in story.",
+        facts: [
+          { text: "Stands as a historical heritage node.", source: "Global Cartography Registry", verified: false }
+        ],
+        about: "This historic point of interest marks a regional heritage node.",
+        history: [
+          { year: "1924", event: "Formally registered as a regional landmark." }
+        ],
+        news: [],
+        isGrounded: false,
+        source: "unavailable"
+      },
+      {
+        id: `global-landmark-2-${uLat.toFixed(3)}-${uLng.toFixed(3)}`,
+        name: `Scenic Nature Viewpoint`,
+        category: mockCategory === "All" || mockCategory === "Nature" ? "Nature" : mockCategory,
+        type: "Park",
+        lat: uLat - 0.006,
+        lng: uLng - 0.004,
+        rating: 4.7,
+        reviewCount: 180,
+        address: `Nearby Coastal / Green Ridge`,
+        distance: "1.1 km",
+        status: "Open • Closes 7:00 PM",
+        image: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=800&q=80",
+        quickFact: "Known for its beautiful natural views and park walks.",
+        facts: [
+          { text: "Spans a local park area.", source: "Conservation Union", verified: false }
+        ],
+        about: "A peaceful green space for walking and exploring.",
+        history: [
+          { year: "1975", event: "Earmarked as a protected municipal green space." }
+        ],
+        news: [],
+        isGrounded: false,
+        source: "unavailable"
+      }
+    ];
+
     if (!ai) {
-      // If Gemini is not configured, fallback to a clean mock list of global landmarks for the vicinity to avoid crashing
-      const mockCategory = (category as string) || "All";
-      const fallbackList = [
-        {
-          id: `global-landmark-1-${uLat.toFixed(3)}-${uLng.toFixed(3)}`,
-          name: `Historic Discovery Point`,
-          category: mockCategory === "All" || mockCategory === "History" ? "History" : mockCategory,
-          type: "Monument",
-          lat: uLat + 0.005,
-          lng: uLng + 0.005,
-          rating: 4.6,
-          reviewCount: 320,
-          address: `Nearby Global District (Lat: ${uLat.toFixed(3)}, Lng: ${uLng.toFixed(3)})`,
-          distance: "0.8 km",
-          status: "Open Now",
-          image: "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=800&q=80",
-          quickFact: "A prominent local landmark rich in story.",
-          facts: [
-            { text: "Stands as a historical heritage node.", source: "Global Cartography Registry", verified: false }
-          ],
-          about: "This historic point of interest marks a regional heritage node.",
-          history: [
-            { year: "1924", event: "Formally registered as a regional landmark." }
-          ],
-          news: [],
-          isGrounded: false,
-          source: "unavailable"
-        },
-        {
-          id: `global-landmark-2-${uLat.toFixed(3)}-${uLng.toFixed(3)}`,
-          name: `Scenic Nature Viewpoint`,
-          category: mockCategory === "All" || mockCategory === "Nature" ? "Nature" : mockCategory,
-          type: "Park",
-          lat: uLat - 0.006,
-          lng: uLng - 0.004,
-          rating: 4.7,
-          reviewCount: 180,
-          address: `Nearby Coastal / Green Ridge`,
-          distance: "1.1 km",
-          status: "Open • Closes 7:00 PM",
-          image: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=800&q=80",
-          quickFact: "Known for its beautiful natural views and park walks.",
-          facts: [
-            { text: "Spans a local park area.", source: "Conservation Union", verified: false }
-          ],
-          about: "A peaceful green space for walking and exploring.",
-          history: [
-            { year: "1975", event: "Earmarked as a protected municipal green space." }
-          ],
-          news: [],
-          isGrounded: false,
-          source: "unavailable"
-        }
-      ];
+      return res.json({ status: "success", places: fallbackList });
+    }
+
+    if (checkApiThrottle()) {
       return res.json({ status: "success", places: fallbackList });
     }
 
@@ -488,91 +497,168 @@ JSON schema requirement:
   ]
 }`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            places: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  name: { type: Type.STRING },
-                  category: { type: Type.STRING },
-                  type: { type: Type.STRING },
-                  lat: { type: Type.NUMBER },
-                  lng: { type: Type.NUMBER },
-                  rating: { type: Type.NUMBER },
-                  reviewCount: { type: Type.INTEGER },
-                  address: { type: Type.STRING },
-                  distance: { type: Type.STRING },
-                  status: { type: Type.STRING },
-                  image: { type: Type.STRING },
-                  quickFact: { type: Type.STRING },
-                  facts: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        text: { type: Type.STRING },
-                        source: { type: Type.STRING },
-                        verified: { type: Type.BOOLEAN }
-                      },
-                      required: ["text", "source", "verified"]
-                    }
-                  },
-                  about: { type: Type.STRING },
-                  history: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        year: { type: Type.STRING },
-                        event: { type: Type.STRING }
-                      },
-                      required: ["year", "event"]
-                    }
-                  },
-                  news: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        date: { type: Type.STRING },
-                        headline: { type: Type.STRING },
-                        publisher: { type: Type.STRING },
-                        summary: { type: Type.STRING }
-                      },
-                      required: ["date", "headline", "publisher", "summary"]
-                    }
-                  }
-                },
-                required: ["id", "name", "category", "type", "lat", "lng", "rating", "reviewCount", "address", "distance", "status", "image", "quickFact", "facts", "about", "history", "news"]
-              }
-            }
-          },
-          required: ["places"]
+    // Attempt 1: Search Grounding with Raw JSON formatting instructions
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt + "\n\nCRITICAL: Return ONLY a raw JSON block matching the specified keys, with no markdown styling other than the JSON block itself, and no additional conversation.",
+        config: {
+          tools: [{ googleSearch: {} }]
         }
+      });
+      responseText = response.text || "";
+      attemptType = 1;
+      isGrounded = true;
+      source = "search";
+    } catch (err) {
+      if (isQuotaError(err)) {
+        triggerApiThrottle();
+        return res.json({ status: "success", places: fallbackList });
       }
-    });
+      console.warn("Attempt 1 (Global Search + Raw JSON) failed. Retrying Attempt 2 (Model-Only + Strict JSON Schema)...", err);
 
-    const parsed = JSON.parse(response.text.trim());
-    const generatedPlaces = (parsed.places || []).map((p: any) => ({
-      ...p,
-      isGrounded: true,
-      source: "search"
-    }));
+      // Attempt 2: Strict JSON Schema without Google Search (extremely stable and robust fallback)
+      try {
+        const response = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: prompt + "\n\nDo not use Google Search. Rely solely on your extensive pre-trained world knowledge. CRITICAL: For Attempt 2, set verified to false and set source to \"Generative AI Knowledge Model\".",
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                places: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      name: { type: Type.STRING },
+                      category: { type: Type.STRING },
+                      type: { type: Type.STRING },
+                      lat: { type: Type.NUMBER },
+                      lng: { type: Type.NUMBER },
+                      rating: { type: Type.NUMBER },
+                      reviewCount: { type: Type.INTEGER },
+                      address: { type: Type.STRING },
+                      distance: { type: Type.STRING },
+                      status: { type: Type.STRING },
+                      image: { type: Type.STRING },
+                      quickFact: { type: Type.STRING },
+                      facts: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            text: { type: Type.STRING },
+                            source: { type: Type.STRING },
+                            verified: { type: Type.BOOLEAN }
+                          },
+                          required: ["text", "source", "verified"]
+                        }
+                      },
+                      about: { type: Type.STRING },
+                      history: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            year: { type: Type.STRING },
+                            event: { type: Type.STRING }
+                          },
+                          required: ["year", "event"]
+                        }
+                      },
+                      news: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            date: { type: Type.STRING },
+                            headline: { type: Type.STRING },
+                            publisher: { type: Type.STRING },
+                            summary: { type: Type.STRING }
+                          },
+                          required: ["date", "headline", "publisher", "summary"]
+                        }
+                      }
+                    },
+                    required: ["id", "name", "category", "type", "lat", "lng", "rating", "reviewCount", "address", "distance", "status", "image", "quickFact", "facts", "about", "history", "news"]
+                  }
+                }
+              },
+              required: ["places"]
+            }
+          }
+        });
+        responseText = response.text || "";
+        attemptType = 2;
+        isGrounded = false;
+        source = "model_only";
+      } catch (err2) {
+        console.error("All Gemini attempts to generate nearby places failed. Returning local fallback list.", err2);
+        if (isQuotaError(err2)) {
+          triggerApiThrottle();
+        }
+        return res.json({ status: "success", places: fallbackList });
+      }
+    }
+
+    // Clean and parse JSON response
+    let parsed: any = {};
+    try {
+      let cleanedText = responseText.trim();
+      if (cleanedText.startsWith("```")) {
+        cleanedText = cleanedText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+      }
+      parsed = JSON.parse(cleanedText);
+    } catch (parseErr) {
+      console.warn("Parsing generated places JSON text failed. Returning local fallback list...", parseErr, responseText);
+      return res.json({ status: "success", places: fallbackList });
+    }
+
+    const generatedPlaces = (parsed.places || []).map((p: any) => {
+      // Clean and normalize each place property
+      const finalFacts = (p.facts || []).map((f: any) => ({
+        text: f.text || "Central heritage element.",
+        source: isGrounded ? (f.source || "Search Record") : "Generative AI Knowledge Model",
+        verified: isGrounded ? (f.verified !== false) : false
+      }));
+
+      const finalNews = (p.news || []).map((n: any) => ({
+        date: n.date || "2026-05-01",
+        headline: n.headline || "Activity reported nearby",
+        publisher: isGrounded ? (n.publisher || "Local Report") : "Generative AI Knowledge Model",
+        summary: n.summary || "Engagement and active interest reported around this location."
+      }));
+
+      return {
+        id: p.id || `gen-${Math.random().toString(36).substr(2, 9)}`,
+        name: p.name || "Real Landmark",
+        category: p.category || "History",
+        type: p.type || "Point of Interest",
+        lat: p.lat || uLat,
+        lng: p.lng || uLng,
+        rating: p.rating || 4.5,
+        reviewCount: p.reviewCount || 100,
+        address: p.address || `Near ${uLat.toFixed(3)}, ${uLng.toFixed(3)}`,
+        distance: p.distance || "1.0 km",
+        status: p.status || "Open Now",
+        image: p.image || "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=800&q=80",
+        quickFact: p.quickFact || "A prominent local landmark rich in story.",
+        facts: finalFacts,
+        about: p.about || "This historic point of interest marks a regional heritage node.",
+        history: p.history || [{ year: "Recent", event: "Continues to be a key point of interest." }],
+        news: finalNews,
+        isGrounded,
+        source
+      };
+    });
 
     // Save to cache
     dynamicPlacesCache.set(cacheKey, generatedPlaces);
     
-    res.json({ status: "success", places: generatedPlaces });
+    return res.json({ status: "success", places: generatedPlaces });
 
   } catch (error: any) {
     console.error("Dynamic places generation failed:", error);
