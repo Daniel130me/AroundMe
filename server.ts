@@ -765,7 +765,7 @@ function isQuotaError(err: any): boolean {
 }
 
 // API Gateway to switch models when one is not responding or hits quota limits
-const GATEWAY_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"];
+const GATEWAY_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash"];
 
 async function generateContentWithGateway(params: {
   model?: string;
@@ -1212,8 +1212,22 @@ Use the Google Search tool to find actual real-time or historical information ab
 If asked about other places, try to connect them back or say that you specialize in ${placeName}.
 Always maintain a friendly, professional, and knowledgeable persona.`;
 
+    // Filter out leading model messages to comply with Gemini multi-turn history requirements (must start with user turn)
+    let startIndex = 0;
+    while (startIndex < messages.length && messages[startIndex].role !== "user") {
+      startIndex++;
+    }
+    const validMessages = messages.slice(startIndex);
+
+    if (validMessages.length === 0) {
+      return res.json({
+        status: "success",
+        message: `As a ${roleType || "Local Guide"}, I would love to tell you more about **${placeName}**!`
+      });
+    }
+
     // Map conversation history to Gemini contents structure
-    const geminiContents = messages.map((m: any) => ({
+    const geminiContents = validMessages.map((m: any) => ({
       role: m.role === "user" ? "user" : "model",
       parts: [{ text: m.content }]
     }));
