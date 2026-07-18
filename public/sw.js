@@ -43,13 +43,17 @@ self.addEventListener("fetch", (event) => {
   // Skip API calls or Firestore calls so they always go to the network first
   if (requestUrl.pathname.startsWith("/api/") || requestUrl.hostname.includes("firestore") || requestUrl.hostname.includes("firebase")) {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        // Return a mock offline JSON response for APIs if offline
+      fetch(event.request).catch((err) => {
+        // Return a mock offline JSON response for APIs if offline or server is unreachable
+        const isActuallyOffline = typeof navigator !== "undefined" && !navigator.onLine;
         return new Response(
           JSON.stringify({
             status: "offline",
-            message: "You are currently offline. Showing cached information if available.",
-            offline: true
+            message: isActuallyOffline
+              ? "You are currently offline. Showing cached information if available."
+              : "The live backend service is temporarily unreachable (cold starting or network blip). Showing cached offline information if available.",
+            offline: true,
+            errorDetail: err?.message || "Network request failed"
           }),
           { headers: { "Content-Type": "application/json" } }
         );

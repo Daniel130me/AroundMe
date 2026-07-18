@@ -327,53 +327,7 @@ app.get("/api/places/nearby", async (req, res) => {
       uLng = 3.4045;
     }
 
-    // Calculate distance from Lagos Center (6.4447, 3.4045)
-    const distFromLagos = getDistance(uLat, uLng, 6.4447, 3.4045);
-
-    // If the coordinates are close to Lagos (within 50km), we use the curated high-quality Lagos places list.
-    if (distFromLagos <= 50) {
-      let places = LAGOS_PLACES.map(p => ({ ...p, isGrounded: true, source: "cached" }));
-
-      if (category && category !== "All") {
-        places = places.filter(p => p.category.toLowerCase() === (category as string).toLowerCase());
-      }
-
-      if (search) {
-        const q = (search as string).toLowerCase();
-        places = places.filter(p => 
-          p.name.toLowerCase().includes(q) || 
-          p.about.toLowerCase().includes(q) || 
-          p.category.toLowerCase().includes(q)
-        );
-      }
-
-      places = places.map(p => {
-        const dist = getDistance(uLat, uLng, p.lat, p.lng);
-        return {
-          ...p,
-          distance: dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`,
-          sortDistance: dist
-        };
-      });
-
-      if (interests) {
-        const userInterestsList = (interests as string).split(",").map(i => i.trim().toLowerCase());
-        places.sort((a, b) => {
-          const aMatch = userInterestsList.includes(a.category.toLowerCase()) ? 1 : 0;
-          const bMatch = userInterestsList.includes(b.category.toLowerCase()) ? 1 : 0;
-          if (aMatch !== bMatch) {
-            return bMatch - aMatch; // Match on top
-          }
-          return (a as any).sortDistance - (b as any).sortDistance;
-        });
-      } else {
-        places.sort((a, b) => (a as any).sortDistance - (b as any).sortDistance);
-      }
-
-      return res.json({ status: "success", places });
-    }
-
-    // Otherwise, we are in GLOBAL mode! Let's generate real landmarks near uLat, uLng dynamically using Gemini!
+    // Let's generate real landmarks near uLat, uLng dynamically using Gemini!
     const cacheKey = `${uLat.toFixed(3)}_${uLng.toFixed(3)}_${category || "All"}_${search || ""}_${interests || ""}`;
     if (dynamicPlacesCache.has(cacheKey)) {
       console.log(`Serving dynamic global landmarks for key ${cacheKey} from cache.`);
