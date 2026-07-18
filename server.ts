@@ -498,7 +498,7 @@ JSON schema requirement:
 
     // Attempt 1: Search Grounding with Raw JSON formatting instructions
     try {
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithGateway({
         model: "gemini-3.5-flash",
         contents: prompt + "\n\nCRITICAL: Return ONLY a raw JSON block matching the specified keys, with no markdown styling other than the JSON block itself, and no additional conversation.",
         config: {
@@ -518,7 +518,7 @@ JSON schema requirement:
 
       // Attempt 2: Strict JSON Schema without Google Search (extremely stable and robust fallback)
       try {
-        const response = await ai.models.generateContent({
+        const response = await generateContentWithGateway({
           model: "gemini-3.5-flash",
           contents: prompt + "\n\nDo not use Google Search. Rely solely on your extensive pre-trained world knowledge. CRITICAL: For Attempt 2, set verified to false and set source to \"Generative AI Knowledge Model\".",
           config: {
@@ -764,6 +764,58 @@ function isQuotaError(err: any): boolean {
   );
 }
 
+// API Gateway to switch models when one is not responding or hits quota limits
+const GATEWAY_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"];
+
+async function generateContentWithGateway(params: {
+  model?: string;
+  contents: any;
+  config?: any;
+}): Promise<any> {
+  if (!ai) {
+    throw new Error("Google GenAI is not initialized.");
+  }
+
+  // Bypass the gateway wrapper for image generation models
+  if (params.config?.imageConfig || (params.model && params.model.includes("-image"))) {
+    return ai.models.generateContent(params as any);
+  }
+
+  const requestedModel = params.model || GATEWAY_MODELS[0];
+  const modelsToTry = [
+    requestedModel,
+    ...GATEWAY_MODELS.filter((m) => m !== requestedModel)
+  ];
+
+  let lastError: any = null;
+
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const currentModel = modelsToTry[i];
+    console.log(`[Model Gateway] Trying model: ${currentModel} (Attempt ${i + 1}/${modelsToTry.length})`);
+
+    try {
+      const callParams = {
+        ...params,
+        model: currentModel,
+      };
+
+      const result = await ai.models.generateContent(callParams);
+      console.log(`[Model Gateway] Success with model: ${currentModel}`);
+      return result;
+    } catch (err: any) {
+      lastError = err;
+      const errMsg = String(err.message || err).toLowerCase();
+      console.warn(`[Model Gateway] Model ${currentModel} failed:`, errMsg);
+
+      if (isQuotaError(err)) {
+        console.warn(`[Model Gateway] Quota/limit reached for model ${currentModel}. Falling back to next available model...`);
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 // Generate place summary using Gemini AI
 app.post("/api/places/generate-summary", async (req, res) => {
   const { placeId, placeName, category, address, lat, lng } = req.body;
@@ -886,7 +938,7 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
 
     // Attempt 1: Search grounding with strict JSON responseSchema
     try {
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithGateway({
         model: "gemini-3.5-flash",
         contents: prompt,
         config: {
@@ -954,7 +1006,7 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
       }
       console.warn("Attempt 1 (Search + JSON Schema) failed. Retrying Attempt 2 (Plain JSON string formatted search)...", err);
       try {
-        const response = await ai.models.generateContent({
+        const response = await generateContentWithGateway({
           model: "gemini-3.5-flash",
           contents: prompt + "\n\nCRITICAL: Return ONLY a raw JSON block matching the specified keys, with no additional text or conversation.",
           config: {
@@ -974,7 +1026,7 @@ Remember: Never invent facts, news, or URLs. Base the response strictly on actua
         }
         console.warn("Attempt 2 failed. Retrying Attempt 3 (Internal knowledge + strict JSON Schema)...", err2);
         try {
-          const response = await ai.models.generateContent({
+          const response = await generateContentWithGateway({
             model: "gemini-3.5-flash",
             contents: prompt + "\n\nDo not use Google Search. Rely solely on your extensive knowledge. CRITICAL: For Attempt 3, set verified to false, set source to \"Generative AI Knowledge Model\", and set urls to empty string or Google search query link.",
             config: {
@@ -1166,7 +1218,7 @@ Always maintain a friendly, professional, and knowledgeable persona.`;
       parts: [{ text: m.content }]
     }));
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithGateway({
       model: "gemini-3.5-flash",
       contents: geminiContents,
       config: {
