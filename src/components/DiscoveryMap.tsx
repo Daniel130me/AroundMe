@@ -20,11 +20,9 @@ interface DiscoveryMapProps {
 }
 
 const GOOGLE_MAPS_KEY =
-  process.env.GOOGLE_MAPS_PLATFORM_KEY ||
-  (import.meta as any).env?.VITE_GOOGLE_MAPS_PLATFORM_KEY ||
-  "";
+  (import.meta as any).env?.VITE_GOOGLE_MAPS_PLATFORM_KEY ?? "";
 
-const hasValidKey = Boolean(GOOGLE_MAPS_KEY) && GOOGLE_MAPS_KEY !== "YOUR_API_KEY";
+const hasValidKey = Boolean(GOOGLE_MAPS_KEY) && GOOGLE_MAPS_KEY !== "YOUR_API_KEY" && GOOGLE_MAPS_KEY.trim() !== "";
 
 const getGoogleTypes = (category: string): string[] => {
   switch (category.toLowerCase()) {
@@ -219,6 +217,17 @@ export default function DiscoveryMap({
   onPlacesFetched,
   onCenterChanged
 }: DiscoveryMapProps) {
+  const googleMapsKey =
+    (import.meta as any).env?.VITE_GOOGLE_MAPS_PLATFORM_KEY ?? "";
+
+  if (!googleMapsKey.trim()) {
+    return (
+      <div className="p-6 text-center">
+        Google Maps is not configured.
+      </div>
+    );
+  }
+
   const [zoom, setZoom] = useState(13);
   const [center, setCenter] = useState({ lat: 6.44, lng: 3.44 }); // Default Lagos Center
 
